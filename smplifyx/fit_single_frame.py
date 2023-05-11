@@ -45,6 +45,10 @@ from optimizers import optim_factory
 import fitting
 from human_body_prior.tools.model_loader import load_vposer
 
+from matplotlib import pyplot as plt
+
+import matplotlib
+matplotlib.use("tkAgg")
 
 def fit_single_frame(img,
                      keypoints,
@@ -98,6 +102,7 @@ def fit_single_frame(img,
                      left_shoulder_idx=2,
                      right_shoulder_idx=5,
                      **kwargs):
+    inicio = time.time()
     assert batch_size == 1, 'PyTorch L-BFGS only supports batch_size == 1'
 
     device = torch.device('cuda') if use_cuda else torch.device('cpu')
@@ -482,7 +487,12 @@ def fit_single_frame(img,
                 min_idx = 0
             pickle.dump(results[min_idx]['result'], result_file, protocol=2)
 
+    final = time.time()
+    print('---------------------------')
+    print('Tiempo total del programa: ' + str(final-inicio) +' segundos')
+    print('---------------------------')
     if save_meshes or visualize:
+        inicio = time.time()
         body_pose = vposer.decode(
             pose_embedding,
             output_type='aa').view(1, -1) if use_vposer else None
@@ -499,26 +509,35 @@ def fit_single_frame(img,
         vertices = model_output.vertices.detach().cpu().numpy().squeeze()
 
         import trimesh
-
+        #from PIL import Image
+        #uv=np.load('images\smpl_uv_map.npy')
+        #texture=Image.open('images\\f_01_nrm.002.png')
+        #out_mesh = trimesh.Trimesh(vertices, body_model.faces, visual=trimesh.visual.TextureVisuals(uv=uv, image=texture), process=False)
         out_mesh = trimesh.Trimesh(vertices, body_model.faces, process=False)
         rot = trimesh.transformations.rotation_matrix(
             np.radians(180), [1, 0, 0])
         out_mesh.apply_transform(rot)
         out_mesh.export(mesh_fn)
 
-    if visualize:
+    if True:#visualize:
         import pyrender
 
+        #texture_image = pyrender.Texture(source= np.asarray(Image.open('images\m_01_alb.002.png')), source_channels='RGB')
+        #image = np.asarray(Image.open('images\img.png')).astype(np.float32)/255
         material = pyrender.MetallicRoughnessMaterial(
             metallicFactor=0.0,
             alphaMode='OPAQUE',
-            baseColorFactor=(1.0, 1.0, 0.9, 1.0))
+            baseColorFactor=(0.8, 0.8, 0.8, 0.8),
+            )
         mesh = pyrender.Mesh.from_trimesh(
             out_mesh,
-            material=material)
+           material=material,)
+           #wireframe=False,
+           #smooth=True)
 
-        scene = pyrender.Scene(bg_color=[0.0, 0.0, 0.0, 0.0],
-                               ambient_light=(0.3, 0.3, 0.3))
+        scene = pyrender.Scene(bg_color=[0,0,0,0],
+                               ambient_light= None)
+
         scene.add(mesh, 'mesh')
 
         camera_center = camera.center.detach().cpu().numpy().squeeze()
@@ -536,9 +555,14 @@ def fit_single_frame(img,
         scene.add(camera, pose=camera_pose)
 
         # Get the lights from the viewer
-        light_nodes = monitor.mv.viewer._create_raymond_lights()
-        for node in light_nodes:
-            scene.add_node(node)
+        scene.add(pyrender.DirectionalLight(intensity=3), pose=camera_pose)
+        #scene.add(pyrender.PointLight(), pose=(10,10))
+        #scene.add(pyrender.PointLight())
+
+        #node1=pyrender.node.Node()
+        #light_nodes = monitor.mv.viewer._create_raymond_lights()
+        #for node in light_nodes:
+        #    scene.add_node(node)
 
         r = pyrender.OffscreenRenderer(viewport_width=W,
                                        viewport_height=H,
@@ -547,9 +571,20 @@ def fit_single_frame(img,
         color = color.astype(np.float32) / 255.0
 
         valid_mask = (color[:, :, -1] > 0)[:, :, np.newaxis]
-        input_img = img.detach().cpu().numpy()
-        output_img = (color[:, :, :-1] * valid_mask +
-                      (1 - valid_mask) * input_img)
 
+        # sobrepone la imagen con el avatar
+        #input_img = img.detach().cpu().numpy()
+        #output_img = (color[:, :, :-1] * valid_mask +
+        #              (1 - valid_mask) * input_img)
+
+        output_img = color[:, :, :-1]
         img = pil_img.fromarray((output_img * 255).astype(np.uint8))
-        img.save(out_img_fn)
+
+        r.delete()
+        plt.imshow(img)
+        final = time.time()
+        print('---------------------------')
+        print('Tiempo total de renderizado: ' + str(final - inicio) + ' segundos')
+        print('---------------------------')
+        plt.show()
+        #img.save(out_img_fn)

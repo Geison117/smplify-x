@@ -55,7 +55,8 @@ class MeshViewer(object):
                                       viewport_size=(width, height),
                                       cull_faces=False,
                                       run_in_thread=True,
-                                      registered_keys=registered_keys)
+                                      registered_keys=registered_keys
+                                      )
 
     def is_active(self):
         return self.viewer.is_active

@@ -34,6 +34,7 @@ from utils import JointMapper
 from cmd_parser import parse_config
 from data_parser import create_dataset
 from fit_single_frame import fit_single_frame
+from fit_single_frame2 import fit_single_frame2
 
 from camera import create_camera
 from prior import create_prior
@@ -42,6 +43,8 @@ torch.backends.cudnn.enabled = False
 
 
 def main(**args):
+
+
     output_folder = args.pop('output_folder')
     output_folder = osp.expandvars(output_folder)
     if not osp.exists(output_folder):
@@ -104,7 +107,7 @@ def main(**args):
                         create_global_orient=True,
                         create_body_pose=not args.get('use_vposer'),
                         create_betas=True,
-                        create_left_hand_pose=True,
+                        create_left_hand_pose= True,
                         create_right_hand_pose=True,
                         create_expression=True,
                         create_jaw_pose=True,
@@ -198,68 +201,81 @@ def main(**args):
     # Add a fake batch dimension for broadcasting
     joint_weights.unsqueeze_(dim=0)
 
-    for idx, data in enumerate(dataset_obj):
+    #Quitar vposer
+    args.pop('use_vposer')
 
-        img = data['img']
-        fn = data['fn']
-        keypoints = data['keypoints']
-        print('Processing: {}'.format(data['img_path']))
-
-        curr_result_folder = osp.join(result_folder, fn)
-        if not osp.exists(curr_result_folder):
-            os.makedirs(curr_result_folder)
-        curr_mesh_folder = osp.join(mesh_folder, fn)
-        if not osp.exists(curr_mesh_folder):
-            os.makedirs(curr_mesh_folder)
-        for person_id in range(keypoints.shape[0]):
-            if person_id >= max_persons and max_persons > 0:
-                continue
-
-            curr_result_fn = osp.join(curr_result_folder,
-                                      '{:03d}.pkl'.format(person_id))
-            curr_mesh_fn = osp.join(curr_mesh_folder,
-                                    '{:03d}.obj'.format(person_id))
-
-            curr_img_folder = osp.join(output_folder, 'images', fn,
-                                       '{:03d}'.format(person_id))
-            if not osp.exists(curr_img_folder):
-                os.makedirs(curr_img_folder)
-
-            if gender_lbl_type != 'none':
-                if gender_lbl_type == 'pd' and 'gender_pd' in data:
-                    gender = data['gender_pd'][person_id]
-                if gender_lbl_type == 'gt' and 'gender_gt' in data:
-                    gender = data['gender_gt'][person_id]
+    reps = 100
+    for rep in range(reps):
+        print(rep)
+        dataset_obj = create_dataset(img_folder=img_folder, **args)
+        for idx, data in enumerate(dataset_obj):
+            if rep==0:
+                use_vposer=True
+                body_pose=None
             else:
-                gender = input_gender
+                use_vposer = True
+            img = data['img']
+            fn = data['fn']
+            keypoints = data['keypoints']
+            print('Processing: {}'.format(data['img_path']))
 
-            if gender == 'neutral':
-                body_model = neutral_model
-            elif gender == 'female':
-                body_model = female_model
-            elif gender == 'male':
-                body_model = male_model
+            curr_result_folder = osp.join(result_folder, fn)
+            if not osp.exists(curr_result_folder):
+                os.makedirs(curr_result_folder)
+            curr_mesh_folder = osp.join(mesh_folder, fn)
+            if not osp.exists(curr_mesh_folder):
+                os.makedirs(curr_mesh_folder)
+            for person_id in range(keypoints.shape[0]):
+                if person_id >= max_persons and max_persons > 0:
+                    continue
 
-            out_img_fn = osp.join(curr_img_folder, 'output.png')
+                curr_result_fn = osp.join(curr_result_folder,
+                                          '{:03d}.pkl'.format(person_id))
+                curr_mesh_fn = osp.join(curr_mesh_folder,
+                                        '{:03d}.obj'.format(person_id))
 
-            fit_single_frame(img, keypoints[[person_id]],
-                             body_model=body_model,
-                             camera=camera,
-                             joint_weights=joint_weights,
-                             dtype=dtype,
-                             output_folder=output_folder,
-                             result_folder=curr_result_folder,
-                             out_img_fn=out_img_fn,
-                             result_fn=curr_result_fn,
-                             mesh_fn=curr_mesh_fn,
-                             shape_prior=shape_prior,
-                             expr_prior=expr_prior,
-                             body_pose_prior=body_pose_prior,
-                             left_hand_prior=left_hand_prior,
-                             right_hand_prior=right_hand_prior,
-                             jaw_prior=jaw_prior,
-                             angle_prior=angle_prior,
-                             **args)
+                curr_img_folder = osp.join(output_folder, 'images', fn,
+                                           '{:03d}'.format(person_id))
+                if not osp.exists(curr_img_folder):
+                    os.makedirs(curr_img_folder)
+
+                if gender_lbl_type != 'none':
+                    if gender_lbl_type == 'pd' and 'gender_pd' in data:
+                        gender = data['gender_pd'][person_id]
+                    if gender_lbl_type == 'gt' and 'gender_gt' in data:
+                        gender = data['gender_gt'][person_id]
+                else:
+                    gender = input_gender
+
+                if gender == 'neutral':
+                    body_model = neutral_model
+                elif gender == 'female':
+                    body_model = female_model
+                elif gender == 'male':
+                    body_model = male_model
+
+                out_img_fn = osp.join(curr_img_folder, 'output.png')
+                body_pose = fit_single_frame2(img, keypoints[[person_id]],
+                                 body_model=body_model,
+                                 camera=camera,
+                                 joint_weights=joint_weights,
+                                 dtype=dtype,
+                                 output_folder=output_folder,
+                                 result_folder=curr_result_folder,
+                                 out_img_fn=out_img_fn,
+                                 result_fn=curr_result_fn,
+                                 mesh_fn=curr_mesh_fn,
+                                 shape_prior=shape_prior,
+                                 expr_prior=expr_prior,
+                                 body_pose_prior=body_pose_prior,
+                                 left_hand_prior=left_hand_prior,
+                                 right_hand_prior=right_hand_prior,
+                                 jaw_prior=jaw_prior,
+                                 angle_prior=angle_prior,
+                                 body_mean_pose = body_pose,
+                                 use_vposer=use_vposer,
+                                 #interpenetration=False,
+                                 **args)
 
     elapsed = time.time() - start
     time_msg = time.strftime('%H hours, %M minutes, %S seconds',
@@ -268,5 +284,32 @@ def main(**args):
 
 
 if __name__ == "__main__":
+    print(os.getcwd())
+    #torch.set_grad_enabled(False)
+    os.chdir(r'D:\\smplify-x')
+    print(os.getcwd())
+    sys.path = ['D:\\smplify-x','D:\\smplify-x\\smplifyx', 'D:\\miniconda3\\envs\\smplx\\python38.zip', 'D:\\miniconda3\\envs\\smplx\\DLLs', 'D:\\miniconda3\\envs\\smplx\\lib', 'D:\\miniconda3\\envs\\smplx', 'D:\\miniconda3\\envs\\smplx\\lib\\site-packages', 'D:\\miniconda3\\envs\\smplx\\lib\\site-packages\\smplx-0.1.28-py3.8.egg', '../']
+    #sys.path.append('../')
+    print(sys.path)
+    #sys.argv=['smplifyx/main.py', '--config', 'cfg_files\\fit_smplx.yaml', '--data_folder', 'data', '--output_folder', 'data\\outputs', '--visualize=True', '--model_folder', 'models', '--vposer_ckpt', 'vposer_v1_0\\vposer_v1_0', '--use_cuda=False', '--optim_shape=False', '--gender', 'neutral', '--max_persons=1']
+    sys.argv = ['smplifyx/main.py',
+                '--config', 'cfg_files\\fit_smpl.yaml',
+                '--data_folder', 'data',
+                '--output_folder',  'data\\outputs',
+                '--visualize=False',
+                '--model_folder', 'models',
+                '--vposer_ckpt', 'vposer_v1_0\\vposer_v1_0',
+                '--use_cuda=False',
+                '--optim_shape=True',
+                '--gender', 'male',
+                '--use_vposer=True',
+                '--max_persons=1',
+                '--interpenetration=False',
+                '--interactive=False',
+                '--use_pca=True',
+                '--maxiters=8'
+                ]
+
+    #a=['--config cfg_files\fit_smplx.yaml', '--data_folder data', '--output_folder data\outputs', '--visualize="True"' ,'--model_folder models','--vposer_ckpt vposer_v1_0\vposer_v1_0', '--use_cuda="False"', '--optim_hands="False"', '--optim_expression="False"', '--optim_shape="False"']
     args = parse_config()
     main(**args)

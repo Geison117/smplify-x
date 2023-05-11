@@ -25,6 +25,7 @@ import configargparse
 
 
 def parse_config(argv=None):
+    print(sys.argv)
     arg_formatter = configargparse.ArgumentDefaultsHelpFormatter
 
     cfg_parser = configargparse.YAMLConfigFileParser
@@ -280,6 +281,7 @@ def parse_config(argv=None):
                         help='The maximum iterations for the optimization')
 
     args = parser.parse_args(argv)
+    print(argv)
 
     args_dict = vars(args)
 
